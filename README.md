@@ -95,6 +95,7 @@ python supertool.py --device SERIAL_NUMBER --scan
 | 7 | Disable System Apps | Disable bloatware without removing |
 | 8 | Revoke Permissions | Remove dangerous permissions |
 | 9 | ADB Shell | Run custom ADB commands |
+| **D** | **Samsung Debloat** | **Make Samsung phone minimal & fast** |
 | 0 | Settings | Configure tool settings |
 
 ## Risk Levels
@@ -116,6 +117,61 @@ python supertool.py --device SERIAL_NUMBER --scan
 - **Loan Sharks** - Predatory lending apps
 - **Spyware/Stalkerware** - Apps that track user activity
 - **Data Harvesters** - Apps that collect and sell user data
+
+## Samsung Debloat (Entry-Level Devices)
+
+Special feature for making Samsung phones minimal and lightweight. Optimized for entry-level devices like:
+
+**Supported Models:**
+- Galaxy A05, A05s, A06, A07
+- Galaxy A14, A16, A17
+- Galaxy A22, A23, A24
+- Galaxy M05, M14, M15
+- And other budget Samsung devices
+
+### Debloat Levels
+
+| Level | What it removes |
+|-------|-----------------|
+| **Light** | Microsoft apps, Facebook, Amazon, Netflix, AR Emoji, Games |
+| **Medium** | Light + Bixby, Themes, Edge panels, Samsung Cloud, Pass |
+| **Aggressive** | Maximum removal - Near stock Android experience |
+| **Custom** | Choose specific categories |
+
+### Categories Available for Removal
+
+- **Microsoft Apps** - Office, Outlook, OneDrive, LinkedIn
+- **Facebook/Meta** - Facebook, Instagram, Messenger
+- **Bixby & AI** - Bixby Voice, Vision, Routines
+- **AR Emoji** - AR Zone, Avatar Stickers, Live Stickers
+- **Game Launcher** - Game Booster, Game Tools, Game Optimizing Service
+- **Themes** - Galaxy Themes, Dynamic Wallpapers
+- **Knox Security** - Enterprise security (not needed for consumers)
+- **Samsung DeX** - Desktop mode (not available on entry-level)
+- **Samsung Health** - Fitness tracking
+- **Samsung Pay** - Mobile payments
+- **Samsung Cloud** - Cloud backup
+- **Edge Panels** - Edge screen shortcuts
+- **Sharing Features** - Quick Share, Smart View
+- **Google Bloat** - YouTube Music, Play Books, etc.
+- **Amazon** - Shopping, Prime Video, Kindle
+- **Netflix** - Netflix app
+- **Other Bloat** - Booking.com, Flipboard, etc.
+
+### Usage
+
+1. Press **D** in the main menu
+2. Select debloat level (Light/Medium/Aggressive/Custom)
+3. Review packages to be removed
+4. Confirm removal
+5. Optionally reboot device
+
+### Package Sources
+
+Based on community research from:
+- [khlam/debloat-samsung-android](https://github.com/khlam/debloat-samsung-android)
+- [Universal Android Debloater](https://github.com/Universal-Debloater-Alliance/universal-android-debloater-next-generation)
+- [Achno/debloat-samsung-ADB-shizuku](https://github.com/Achno/debloat-samsung-ADB-shizuku)
 
 ## For Mobile Shops
 
@@ -174,15 +230,17 @@ adb-SuperTool/
 ├── supertool.py          # Main entry point
 ├── setup.py              # Setup script
 ├── requirements.txt      # Python dependencies
-├── README.md            # This file
-├── android-tools/       # ADB tools (auto-downloaded)
+├── README.md             # This file
+├── run.sh / run.bat      # Platform launchers
+├── android-tools/        # ADB tools (auto-downloaded)
 └── src/
     ├── __init__.py
-    ├── installer.py     # ADB auto-installer
-    ├── adb_manager.py   # ADB wrapper
-    ├── database.py      # Threat database
-    ├── scanner.py       # App scanner
-    └── tui.py           # Terminal UI
+    ├── installer.py      # ADB auto-installer
+    ├── adb_manager.py    # ADB wrapper
+    ├── database.py       # Threat database
+    ├── debloater.py      # Samsung debloat module
+    ├── scanner.py        # App scanner
+    └── tui.py            # Terminal UI
 ```
 
 ## Contributing

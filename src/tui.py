@@ -30,6 +30,13 @@ from .adb_manager import ADBManager, DeviceInfo, DeviceState
 from .scanner import AppScanner, ScanResult, AppRiskAssessment, ScanStatus
 from .database import RiskLevel, AppCategory, get_database
 from .installer import ADBInstaller
+from .debloater import (
+    DebloatLevel, PackageCategory, DebloatPackage,
+    get_light_debloat_packages, get_medium_debloat_packages,
+    get_aggressive_debloat_packages, get_packages_by_category,
+    get_category_display_name, is_entry_level_samsung,
+    SAMSUNG_ENTRY_LEVEL_MODELS
+)
 
 
 class Colors:
@@ -73,6 +80,7 @@ class SuperToolTUI:
         ("7", "Disable System Apps", "Disable bloatware without removing"),
         ("8", "Revoke Permissions", "Remove dangerous permissions from apps"),
         ("9", "ADB Shell", "Run custom ADB commands"),
+        ("D", "Samsung Debloat", "Make Samsung phone minimal & fast"),
         ("0", "Settings", "Configure tool settings"),
         ("Q", "Quit", "Exit the application"),
     ]
@@ -239,7 +247,7 @@ class SuperToolTUI:
             self._show_main_menu()
             choice = Prompt.ask(
                 "\n[bold cyan]Enter choice[/bold cyan]",
-                choices=["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "q", "Q"],
+                choices=["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "d", "D", "q", "Q"],
                 default="1"
             ).upper()
 
@@ -263,6 +271,8 @@ class SuperToolTUI:
                 self._revoke_permissions()
             elif choice == "9":
                 self._adb_shell()
+            elif choice == "D":
+                self._samsung_debloat()
             elif choice == "0":
                 self._settings_menu()
 
@@ -894,6 +904,249 @@ class SuperToolTUI:
                 self.console.print(f"[red]{stderr}[/red]")
             if ret != 0:
                 self.console.print(f"[yellow]Exit code: {ret}[/yellow]")
+
+    def _samsung_debloat(self):
+        """Samsung device debloating for minimal/lightweight experience."""
+        self.console.clear()
+
+        # Header
+        self.console.print(Panel(
+            "[bold magenta]SAMSUNG DEBLOAT[/bold magenta]\n\n"
+            "Make your Samsung phone minimal and lightweight!\n"
+            "Removes bloatware, Microsoft apps, Facebook, Bixby, and more.\n\n"
+            "[yellow]Optimized for entry-level devices:[/yellow]\n"
+            "Galaxy A05, A06, A07, A14, A16, A17, M-series, etc.",
+            border_style="magenta",
+            box=DOUBLE
+        ))
+
+        if not self.current_device:
+            self.console.print("[red]No device connected![/red]")
+            input("Press Enter to continue...")
+            return
+
+        # Check if Samsung
+        device = self.current_device
+        is_samsung = "samsung" in device.manufacturer.lower()
+
+        if not is_samsung:
+            self.console.print(f"\n[yellow]Warning: Device ({device.manufacturer}) is not Samsung.[/yellow]")
+            self.console.print("Some packages may not exist on this device.")
+            if not Confirm.ask("Continue anyway?"):
+                return
+
+        # Check if entry-level
+        is_entry = is_entry_level_samsung(device.model)
+        if is_entry:
+            self.console.print(f"\n[green]✓ Detected entry-level Samsung: {device.model}[/green]")
+            self.console.print("[cyan]Aggressive debloating recommended for best performance![/cyan]")
+        else:
+            self.console.print(f"\n[cyan]Device: {device.display_name} ({device.model})[/cyan]")
+
+        # Show debloat level options
+        self.console.print("\n[bold]Select debloat level:[/bold]\n")
+
+        levels_table = Table(box=ROUNDED, show_header=False)
+        levels_table.add_column("Key", style="bold cyan", width=4)
+        levels_table.add_column("Level", width=15)
+        levels_table.add_column("Description", width=50)
+
+        levels_table.add_row("[1]", "[green]Light[/green]",
+            "Remove third-party bloat (Microsoft, Facebook, Amazon, Netflix)")
+        levels_table.add_row("[2]", "[yellow]Medium[/yellow]",
+            "Light + Bixby, Themes, Edge panels, Samsung Cloud")
+        levels_table.add_row("[3]", "[red]Aggressive[/red]",
+            "Maximum removal - Near stock Android experience")
+        levels_table.add_row("[4]", "[magenta]Custom[/magenta]",
+            "Choose specific categories to remove")
+        levels_table.add_row("[B]", "Back", "Return to main menu")
+
+        self.console.print(levels_table)
+
+        level_choice = Prompt.ask(
+            "\nSelect level",
+            choices=["1", "2", "3", "4", "b", "B"],
+            default="2" if is_entry else "1"
+        ).upper()
+
+        if level_choice == "B":
+            return
+
+        # Get packages based on level
+        if level_choice == "1":
+            packages = get_light_debloat_packages()
+            level_name = "Light"
+        elif level_choice == "2":
+            packages = get_medium_debloat_packages()
+            level_name = "Medium"
+        elif level_choice == "3":
+            packages = get_aggressive_debloat_packages()
+            level_name = "Aggressive"
+        elif level_choice == "4":
+            packages = self._custom_debloat_selection()
+            level_name = "Custom"
+            if not packages:
+                return
+        else:
+            return
+
+        # Get currently installed packages
+        self.console.print("\n[cyan]Checking installed packages...[/cyan]")
+        installed = set(self.adb.get_packages(include_system=True))
+
+        # Filter to only packages that are installed
+        to_remove = [p for p in packages if p.package in installed]
+
+        if not to_remove:
+            self.console.print("\n[green]No bloatware packages found to remove![/green]")
+            self.console.print("Device may already be debloated or packages not present.")
+            input("\nPress Enter to continue...")
+            return
+
+        # Display packages to remove
+        self.console.print(f"\n[bold]Found {len(to_remove)} packages to remove ({level_name} debloat):[/bold]\n")
+
+        # Group by category
+        by_category = {}
+        for pkg in to_remove:
+            cat_name = get_category_display_name(pkg.category)
+            if cat_name not in by_category:
+                by_category[cat_name] = []
+            by_category[cat_name].append(pkg)
+
+        for cat_name, pkgs in sorted(by_category.items()):
+            self.console.print(f"\n[bold cyan]{cat_name}[/bold cyan] ({len(pkgs)} packages):")
+            for pkg in pkgs[:5]:  # Show first 5
+                self.console.print(f"  [dim]•[/dim] {pkg.name} [dim]({pkg.package})[/dim]")
+            if len(pkgs) > 5:
+                self.console.print(f"  [dim]  ... and {len(pkgs) - 5} more[/dim]")
+
+        # Warning for aggressive mode
+        if level_choice == "3":
+            self.console.print("\n[bold red]WARNING: Aggressive mode removes many Samsung features![/bold red]")
+            self.console.print("Some features that will be unavailable:")
+            self.console.print("  • Samsung Health, Samsung Pay, Samsung Pass")
+            self.console.print("  • Secure Folder, Find My Mobile")
+            self.console.print("  • Samsung Cloud backup")
+
+        # Confirmation
+        self.console.print()
+        if not Confirm.ask(f"[bold]Remove {len(to_remove)} packages?[/bold]", default=True):
+            return
+
+        # Execute debloat
+        self.console.print("\n[bold]Removing bloatware...[/bold]\n")
+
+        removed = 0
+        failed = 0
+        disabled = 0
+
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TaskProgressColumn(),
+            console=self.console
+        ) as progress:
+            task = progress.add_task("Debloating...", total=len(to_remove))
+
+            for pkg in to_remove:
+                progress.update(task, description=f"Removing {pkg.name}...")
+
+                # Try uninstall for user 0 first
+                success, message = self.adb.uninstall_package(pkg.package, user_id=0)
+
+                if not success:
+                    # Try disable as fallback
+                    success, message = self.adb.disable_package(pkg.package)
+                    if success:
+                        disabled += 1
+                        self.console.print(f"  [yellow]~[/yellow] Disabled: {pkg.name}")
+                    else:
+                        failed += 1
+                        self.console.print(f"  [red]✗[/red] Failed: {pkg.name}")
+                else:
+                    removed += 1
+                    self.console.print(f"  [green]✓[/green] Removed: {pkg.name}")
+
+                progress.advance(task)
+
+        # Summary
+        self.console.print("\n" + "=" * 50)
+        self.console.print("[bold]DEBLOAT COMPLETE![/bold]")
+        self.console.print("=" * 50)
+        self.console.print(f"[green]Removed:  {removed}[/green]")
+        self.console.print(f"[yellow]Disabled: {disabled}[/yellow]")
+        self.console.print(f"[red]Failed:   {failed}[/red]")
+
+        if removed + disabled > 0:
+            self.console.print("\n[cyan]Tip: Restart the device for changes to take full effect.[/cyan]")
+            if Confirm.ask("Reboot device now?", default=False):
+                self.console.print("Rebooting device...")
+                self.adb.reboot()
+                self.console.print("[green]Device is rebooting...[/green]")
+
+        input("\nPress Enter to continue...")
+
+    def _custom_debloat_selection(self) -> List[DebloatPackage]:
+        """Let user select specific categories for custom debloat."""
+        self.console.clear()
+        self.console.print(Panel("[bold]CUSTOM DEBLOAT - Select Categories[/bold]", border_style="magenta"))
+
+        categories = [
+            (PackageCategory.MICROSOFT, "Microsoft Apps", "Office, Outlook, OneDrive, LinkedIn"),
+            (PackageCategory.FACEBOOK, "Facebook/Meta", "Facebook, Instagram, Messenger"),
+            (PackageCategory.SAMSUNG_BIXBY, "Bixby & AI", "Bixby Voice, Vision, Routines"),
+            (PackageCategory.SAMSUNG_AR_EMOJI, "AR Emoji", "AR Zone, Avatar Stickers"),
+            (PackageCategory.SAMSUNG_GAMES, "Game Launcher", "Game Booster, Game Tools"),
+            (PackageCategory.SAMSUNG_THEMES, "Themes", "Galaxy Themes, Wallpapers"),
+            (PackageCategory.SAMSUNG_KNOX, "Knox Security", "Enterprise security features"),
+            (PackageCategory.SAMSUNG_DEX, "Samsung DeX", "Desktop mode"),
+            (PackageCategory.SAMSUNG_HEALTH, "Samsung Health", "Fitness tracking"),
+            (PackageCategory.SAMSUNG_PAY, "Samsung Pay", "Mobile payments"),
+            (PackageCategory.SAMSUNG_CLOUD, "Samsung Cloud", "Cloud backup"),
+            (PackageCategory.SAMSUNG_EDGE, "Edge Panels", "Edge screen shortcuts"),
+            (PackageCategory.SAMSUNG_SHARING, "Sharing Features", "Quick Share, Smart View"),
+            (PackageCategory.GOOGLE_BLOAT, "Google Bloat", "YouTube Music, Play Books, etc."),
+            (PackageCategory.AMAZON, "Amazon", "Shopping, Prime Video, Kindle"),
+            (PackageCategory.NETFLIX, "Netflix", "Netflix app"),
+            (PackageCategory.OTHER_BLOAT, "Other Bloat", "Booking, Flipboard, etc."),
+        ]
+
+        table = Table(box=ROUNDED)
+        table.add_column("#", style="cyan", width=4)
+        table.add_column("Category", width=20)
+        table.add_column("Description", width=45)
+
+        for i, (cat, name, desc) in enumerate(categories, 1):
+            table.add_row(str(i), name, desc)
+
+        self.console.print(table)
+
+        self.console.print("\n[bold]Enter category numbers separated by commas (e.g., 1,2,3)[/bold]")
+        self.console.print("Or type 'all' for everything, 'back' to cancel")
+
+        choice = Prompt.ask("\nCategories", default="1,2,3")
+
+        if choice.lower() == 'back':
+            return []
+
+        if choice.lower() == 'all':
+            selected_cats = [cat for cat, _, _ in categories]
+        else:
+            try:
+                indices = [int(x.strip()) - 1 for x in choice.split(',')]
+                selected_cats = [categories[i][0] for i in indices if 0 <= i < len(categories)]
+            except (ValueError, IndexError):
+                self.console.print("[red]Invalid selection[/red]")
+                return []
+
+        # Collect packages from selected categories
+        packages = []
+        for cat in selected_cats:
+            packages.extend(get_packages_by_category(cat))
+
+        return packages
 
     def _settings_menu(self):
         """Settings menu."""
