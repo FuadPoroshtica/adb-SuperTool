@@ -37,6 +37,10 @@ from .debloater import (
     get_category_display_name, is_entry_level_samsung,
     SAMSUNG_ENTRY_LEVEL_MODELS
 )
+from .recovery import (
+    RecoveryManager, SamsungFirmwareDownloader, GenericFirmwareHelper,
+    HeimdallHelper, DeviceMode
+)
 
 
 class Colors:
@@ -81,6 +85,7 @@ class SuperToolTUI:
         ("8", "Revoke Permissions", "Remove dangerous permissions from apps"),
         ("9", "ADB Shell", "Run custom ADB commands"),
         ("D", "Samsung Debloat", "Make Samsung phone minimal & fast"),
+        ("R", "Recovery & Firmware", "Reset, recovery mode, firmware"),
         ("0", "Settings", "Configure tool settings"),
         ("Q", "Quit", "Exit the application"),
     ]
@@ -94,6 +99,7 @@ class SuperToolTUI:
         self.console = Console()
         self.adb: Optional[ADBManager] = None
         self.scanner: Optional[AppScanner] = None
+        self.recovery: Optional[RecoveryManager] = None
         self.installer = ADBInstaller()
         self.current_device: Optional[DeviceInfo] = None
         self.last_scan: Optional[ScanResult] = None
@@ -162,6 +168,7 @@ class SuperToolTUI:
         self.adb = ADBManager(self.installer.get_adb_command())
         self.adb.start_server()
         self.scanner = AppScanner(self.adb)
+        self.recovery = RecoveryManager(self.adb)
 
         # Try to connect to a device
         self._select_device()
@@ -247,7 +254,7 @@ class SuperToolTUI:
             self._show_main_menu()
             choice = Prompt.ask(
                 "\n[bold cyan]Enter choice[/bold cyan]",
-                choices=["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "d", "D", "q", "Q"],
+                choices=["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "d", "D", "r", "R", "q", "Q"],
                 default="1"
             ).upper()
 
@@ -273,6 +280,8 @@ class SuperToolTUI:
                 self._adb_shell()
             elif choice == "D":
                 self._samsung_debloat()
+            elif choice == "R":
+                self._recovery_menu()
             elif choice == "0":
                 self._settings_menu()
 
@@ -1147,6 +1156,419 @@ class SuperToolTUI:
             packages.extend(get_packages_by_category(cat))
 
         return packages
+
+    def _recovery_menu(self):
+        """Recovery and firmware operations menu."""
+        while True:
+            self.console.clear()
+            self.console.print(Panel(
+                "[bold red]RECOVERY & FIRMWARE[/bold red]\n\n"
+                "Factory reset, recovery mode, download firmware",
+                border_style="red",
+                box=DOUBLE
+            ))
+
+            if not self.current_device:
+                self.console.print("[yellow]No device connected![/yellow]")
+
+            # Show device info
+            if self.current_device:
+                device = self.current_device
+                self.console.print(f"Device: [bold]{device.display_name}[/bold] ({device.model})")
+
+                # Detect manufacturer
+                mfr = GenericFirmwareHelper.detect_manufacturer(device.model, device.manufacturer)
+                mfr_info = GenericFirmwareHelper.get_manufacturer_info(device.manufacturer)
+                if mfr_info:
+                    self.console.print(f"Detected: [cyan]{mfr_info['name']}[/cyan]")
+
+            self.console.print()
+
+            # Menu options
+            menu_table = Table(box=ROUNDED, show_header=False, padding=(0, 2))
+            menu_table.add_column("Key", style="bold cyan", width=4)
+            menu_table.add_column("Option", width=30)
+            menu_table.add_column("Description", style="dim", width=40)
+
+            menu_table.add_row("[1]", "[yellow]Factory Reset[/yellow]", "Wipe all data (DANGEROUS!)")
+            menu_table.add_row("[2]", "Wipe Cache", "Clear cache partition")
+            menu_table.add_row("[3]", "Reboot to Recovery", "Enter recovery mode")
+            menu_table.add_row("[4]", "Reboot to Download/Fastboot", "Enter flash mode")
+            menu_table.add_row("[5]", "Reboot Normal", "Normal restart")
+            menu_table.add_row("[6]", "Shutdown", "Power off device")
+            menu_table.add_row("[7]", "[cyan]Firmware Info[/cyan]", "Get firmware download links")
+            menu_table.add_row("[8]", "Check Samsung Firmware", "Search Samsung FUS")
+            menu_table.add_row("[9]", "Sideload ZIP", "Flash ZIP via recovery")
+            menu_table.add_row("[B]", "Back", "Return to main menu")
+
+            self.console.print(menu_table)
+
+            choice = Prompt.ask(
+                "\nChoice",
+                choices=["1", "2", "3", "4", "5", "6", "7", "8", "9", "b", "B"],
+                default="B"
+            ).upper()
+
+            if choice == "B":
+                break
+            elif choice == "1":
+                self._factory_reset()
+            elif choice == "2":
+                self._wipe_cache()
+            elif choice == "3":
+                self._reboot_recovery()
+            elif choice == "4":
+                self._reboot_download()
+            elif choice == "5":
+                self._reboot_normal()
+            elif choice == "6":
+                self._shutdown_device()
+            elif choice == "7":
+                self._firmware_info()
+            elif choice == "8":
+                self._check_samsung_firmware()
+            elif choice == "9":
+                self._sideload_zip()
+
+    def _factory_reset(self):
+        """Perform factory reset."""
+        self.console.clear()
+        self.console.print(Panel(
+            "[bold red]⚠️  FACTORY RESET  ⚠️[/bold red]\n\n"
+            "This will PERMANENTLY DELETE all data on the device:\n"
+            "• All apps and app data\n"
+            "• All photos, videos, music\n"
+            "• All accounts and settings\n"
+            "• All messages and contacts\n\n"
+            "[yellow]This action CANNOT be undone![/yellow]",
+            border_style="red",
+            box=HEAVY
+        ))
+
+        if not self.current_device:
+            self.console.print("[red]No device connected![/red]")
+            input("\nPress Enter to continue...")
+            return
+
+        self.console.print(f"\nDevice: [bold]{self.current_device.display_name}[/bold]")
+
+        # Triple confirmation
+        self.console.print("\n[bold red]Type 'RESET' to confirm factory reset:[/bold red]")
+        confirm1 = Prompt.ask("Confirmation")
+
+        if confirm1 != "RESET":
+            self.console.print("[green]Factory reset cancelled.[/green]")
+            input("\nPress Enter to continue...")
+            return
+
+        if not Confirm.ask("[red]Are you ABSOLUTELY sure? All data will be lost![/red]", default=False):
+            self.console.print("[green]Factory reset cancelled.[/green]")
+            input("\nPress Enter to continue...")
+            return
+
+        # Perform reset
+        self.console.print("\n[yellow]Initiating factory reset...[/yellow]")
+
+        success, message = self.recovery.factory_reset_adb()
+
+        if success:
+            self.console.print(f"\n[green]✓ {message}[/green]")
+            self.console.print("\n[cyan]The device will reboot and erase all data.[/cyan]")
+            self.console.print("[cyan]This may take several minutes.[/cyan]")
+        else:
+            self.console.print(f"\n[yellow]ADB reset failed: {message}[/yellow]")
+            self.console.print("\n[cyan]Alternative: Rebooting to recovery mode...[/cyan]")
+
+            if Confirm.ask("Reboot to recovery for manual reset?"):
+                self.recovery.reboot_recovery()
+                self.console.print("\n[cyan]In Recovery Mode:[/cyan]")
+                self.console.print("1. Use volume keys to navigate")
+                self.console.print("2. Select 'Wipe data/factory reset'")
+                self.console.print("3. Confirm and wait for reset")
+                self.console.print("4. Select 'Reboot system now'")
+
+        input("\nPress Enter to continue...")
+
+    def _wipe_cache(self):
+        """Wipe cache partition."""
+        self.console.clear()
+        self.console.print(Panel("[bold]WIPE CACHE[/bold]", border_style="yellow"))
+
+        if not self.current_device:
+            self.console.print("[red]No device connected![/red]")
+            input("\nPress Enter to continue...")
+            return
+
+        self.console.print("This will clear the cache partition.")
+        self.console.print("This is safe and can fix app issues.\n")
+
+        if not Confirm.ask("Wipe cache now?"):
+            return
+
+        success, message = self.recovery.wipe_cache()
+
+        if success:
+            self.console.print(f"\n[green]✓ {message}[/green]")
+        else:
+            self.console.print(f"\n[yellow]{message}[/yellow]")
+            self.console.print("\n[cyan]Alternative: Reboot to recovery and wipe cache from there.[/cyan]")
+
+        input("\nPress Enter to continue...")
+
+    def _reboot_recovery(self):
+        """Reboot to recovery mode."""
+        self.console.clear()
+        self.console.print(Panel("[bold]REBOOT TO RECOVERY[/bold]", border_style="cyan"))
+
+        if not self.current_device:
+            self.console.print("[red]No device connected![/red]")
+            input("\nPress Enter to continue...")
+            return
+
+        self.console.print("Recovery mode allows you to:")
+        self.console.print("• Factory reset the device")
+        self.console.print("• Wipe cache partition")
+        self.console.print("• Apply updates from ADB/SD card")
+        self.console.print("• Access advanced options\n")
+
+        if Confirm.ask("Reboot to recovery now?"):
+            if self.recovery.reboot_recovery():
+                self.console.print("\n[green]✓ Rebooting to recovery mode...[/green]")
+                self.console.print("\n[cyan]Navigation in Recovery:[/cyan]")
+                self.console.print("• Volume Up/Down: Navigate")
+                self.console.print("• Power button: Select")
+            else:
+                self.console.print("\n[red]Failed to reboot to recovery[/red]")
+
+        input("\nPress Enter to continue...")
+
+    def _reboot_download(self):
+        """Reboot to download/fastboot mode."""
+        self.console.clear()
+        self.console.print(Panel("[bold]REBOOT TO DOWNLOAD/FASTBOOT MODE[/bold]", border_style="cyan"))
+
+        if not self.current_device:
+            self.console.print("[red]No device connected![/red]")
+            input("\nPress Enter to continue...")
+            return
+
+        device = self.current_device
+        is_samsung = "samsung" in device.manufacturer.lower()
+
+        if is_samsung:
+            self.console.print("[cyan]Samsung Download Mode (Odin Mode)[/cyan]")
+            self.console.print("\nUsed for flashing firmware with:")
+            self.console.print("• Odin (Windows)")
+            self.console.print("• Heimdall (Linux/Mac)\n")
+
+            mode_name = "Download"
+        else:
+            self.console.print("[cyan]Fastboot Mode[/cyan]")
+            self.console.print("\nUsed for flashing with fastboot commands\n")
+            mode_name = "Fastboot"
+
+        if Confirm.ask(f"Reboot to {mode_name} mode now?"):
+            if is_samsung:
+                success = self.recovery.reboot_download()
+            else:
+                success = self.recovery.reboot_bootloader()
+
+            if success:
+                self.console.print(f"\n[green]✓ Rebooting to {mode_name} mode...[/green]")
+
+                if is_samsung:
+                    self.console.print("\n[cyan]Samsung Download Mode:[/cyan]")
+                    self.console.print("• Screen will show 'Downloading...'")
+                    self.console.print("• Connect to Odin/Heimdall to flash firmware")
+                    self.console.print("• To exit: Hold Vol Down + Power for 10 seconds")
+                else:
+                    self.console.print("\n[cyan]Fastboot Mode:[/cyan]")
+                    self.console.print("• Use 'fastboot devices' to verify connection")
+                    self.console.print("• Flash with 'fastboot flash <partition> <file>'")
+                    self.console.print("• Exit with 'fastboot reboot'")
+            else:
+                self.console.print(f"\n[red]Failed to reboot to {mode_name} mode[/red]")
+
+                if is_samsung:
+                    self.console.print("\n[yellow]Manual method:[/yellow]")
+                    self.console.print("1. Power off the device")
+                    self.console.print("2. Hold Volume Down + Power while connecting USB cable")
+                    self.console.print("3. Press Volume Up when prompted")
+
+        input("\nPress Enter to continue...")
+
+    def _reboot_normal(self):
+        """Normal reboot."""
+        if not self.current_device:
+            self.console.print("[red]No device connected![/red]")
+            input("\nPress Enter to continue...")
+            return
+
+        if Confirm.ask("Reboot device now?"):
+            if self.recovery.reboot_normal():
+                self.console.print("[green]✓ Rebooting...[/green]")
+            else:
+                self.console.print("[red]Failed to reboot[/red]")
+
+        input("\nPress Enter to continue...")
+
+    def _shutdown_device(self):
+        """Shutdown the device."""
+        if not self.current_device:
+            self.console.print("[red]No device connected![/red]")
+            input("\nPress Enter to continue...")
+            return
+
+        if Confirm.ask("Shutdown device now?"):
+            if self.recovery.shutdown():
+                self.console.print("[green]✓ Shutting down...[/green]")
+            else:
+                self.console.print("[red]Failed to shutdown[/red]")
+
+        input("\nPress Enter to continue...")
+
+    def _firmware_info(self):
+        """Show firmware download information."""
+        self.console.clear()
+        self.console.print(Panel("[bold]FIRMWARE DOWNLOAD INFO[/bold]", border_style="cyan"))
+
+        if self.current_device:
+            device = self.current_device
+            mfr_key = GenericFirmwareHelper.detect_manufacturer(device.model, device.manufacturer)
+            mfr_info = GenericFirmwareHelper.FIRMWARE_SOURCES.get(mfr_key)
+
+            if mfr_info:
+                self.console.print(f"\n[bold cyan]{mfr_info['name']} Firmware[/bold cyan]\n")
+
+                # Tools
+                self.console.print("[bold]Required Tools:[/bold]")
+                for tool in mfr_info["tools"]:
+                    self.console.print(f"  • {tool}")
+
+                # Websites
+                self.console.print("\n[bold]Download Sources:[/bold]")
+                for name, url in mfr_info["websites"]:
+                    self.console.print(f"  • {name}: [link={url}]{url}[/link]")
+
+                # Instructions
+                self.console.print("\n[bold]Flashing Instructions:[/bold]")
+                self.console.print(mfr_info["instructions"])
+            else:
+                self.console.print("[yellow]Manufacturer not recognized.[/yellow]")
+                self.console.print("\nGeneral firmware sources:")
+                self.console.print("• XDA Developers: https://xdaforums.com/")
+                self.console.print("• Firmware.mobi: https://firmware.mobi/")
+        else:
+            self.console.print("[yellow]Connect a device to get specific firmware info.[/yellow]")
+            self.console.print("\n[bold]Supported Manufacturers:[/bold]")
+            for mfr in GenericFirmwareHelper.get_supported_manufacturers():
+                self.console.print(f"  • {mfr}")
+
+        input("\nPress Enter to continue...")
+
+    def _check_samsung_firmware(self):
+        """Check Samsung firmware availability."""
+        self.console.clear()
+        self.console.print(Panel("[bold]SAMSUNG FIRMWARE CHECK[/bold]", border_style="blue"))
+
+        if self.current_device and "samsung" in self.current_device.manufacturer.lower():
+            model = self.current_device.model
+            self.console.print(f"Device model: [bold]{model}[/bold]")
+        else:
+            model = Prompt.ask("Enter Samsung model number (e.g., SM-A055F)")
+
+        if not model:
+            return
+
+        self.console.print(f"\n[cyan]Checking firmware for {model}...[/cyan]")
+
+        downloader = SamsungFirmwareDownloader()
+
+        # Show common regions
+        self.console.print("\n[bold]Common Regions:[/bold]")
+        regions_table = Table(box=ROUNDED)
+        regions_table.add_column("Code", width=6)
+        regions_table.add_column("Region", width=30)
+
+        common_regions = ["XEU", "BTU", "XAA", "INS", "XSP", "KOO"]
+        for code in common_regions:
+            name = downloader.REGIONS.get(code, "Unknown")
+            regions_table.add_row(code, name)
+
+        self.console.print(regions_table)
+
+        region = Prompt.ask("\nEnter region code", default="XEU")
+
+        self.console.print(f"\n[cyan]Searching firmware for {model} ({region})...[/cyan]")
+
+        info = downloader.get_latest_firmware(model, region)
+
+        if info:
+            self.console.print(f"\n[green]✓ Firmware found![/green]")
+            self.console.print(f"Version: [bold]{info.version}[/bold]")
+            self.console.print(f"Filename: {info.filename}")
+
+            self.console.print("\n[bold]Download Options:[/bold]")
+            self.console.print("• SamMobile: https://www.sammobile.com/firmwares/")
+            self.console.print("• SamFw: https://samfw.com/")
+            self.console.print("• Frija Tool: https://github.com/SlackingVeteran/frija")
+        else:
+            self.console.print(f"\n[yellow]No firmware found for {model} ({region})[/yellow]")
+            self.console.print("\nTry:")
+            self.console.print("• Different region code")
+            self.console.print("• Check model number is correct")
+            self.console.print("• Use SamMobile/SamFw websites directly")
+
+        input("\nPress Enter to continue...")
+
+    def _sideload_zip(self):
+        """Sideload a ZIP file via ADB."""
+        self.console.clear()
+        self.console.print(Panel("[bold]SIDELOAD ZIP[/bold]", border_style="cyan"))
+
+        self.console.print("Sideload is used to flash ZIP files in recovery mode.")
+        self.console.print("\n[bold]Requirements:[/bold]")
+        self.console.print("1. Device must be in recovery mode")
+        self.console.print("2. Select 'Apply update from ADB' in recovery menu")
+        self.console.print("3. Device should show 'sideload' state\n")
+
+        # Check device state
+        mode = self.recovery.get_current_mode() if self.recovery else DeviceMode.NORMAL
+
+        if mode != DeviceMode.SIDELOAD:
+            self.console.print(f"[yellow]Current mode: {mode.value}[/yellow]")
+            self.console.print("[yellow]Device should be in sideload mode.[/yellow]")
+
+            if Confirm.ask("Reboot to recovery first?"):
+                self.recovery.reboot_recovery()
+                self.console.print("\n[cyan]In recovery:[/cyan]")
+                self.console.print("1. Select 'Apply update from ADB'")
+                self.console.print("2. Come back here and enter the ZIP path")
+                input("\nPress Enter when ready...")
+
+        zip_path = Prompt.ask("Enter path to ZIP file")
+
+        if not zip_path:
+            return
+
+        zip_path = Path(zip_path.strip().strip('"').strip("'"))
+
+        if not zip_path.exists():
+            self.console.print(f"[red]File not found: {zip_path}[/red]")
+            input("\nPress Enter to continue...")
+            return
+
+        self.console.print(f"\n[cyan]Sideloading: {zip_path.name}[/cyan]")
+        self.console.print("[yellow]This may take several minutes...[/yellow]\n")
+
+        success, message = self.recovery.sideload_zip(zip_path)
+
+        if success:
+            self.console.print(f"\n[green]✓ {message}[/green]")
+        else:
+            self.console.print(f"\n[red]✗ {message}[/red]")
+
+        input("\nPress Enter to continue...")
 
     def _settings_menu(self):
         """Settings menu."""

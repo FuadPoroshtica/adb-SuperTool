@@ -96,6 +96,7 @@ python supertool.py --device SERIAL_NUMBER --scan
 | 8 | Revoke Permissions | Remove dangerous permissions |
 | 9 | ADB Shell | Run custom ADB commands |
 | **D** | **Samsung Debloat** | **Make Samsung phone minimal & fast** |
+| **R** | **Recovery & Firmware** | **Reset, recovery mode, firmware** |
 | 0 | Settings | Configure tool settings |
 
 ## Risk Levels
@@ -117,6 +118,46 @@ python supertool.py --device SERIAL_NUMBER --scan
 - **Loan Sharks** - Predatory lending apps
 - **Spyware/Stalkerware** - Apps that track user activity
 - **Data Harvesters** - Apps that collect and sell user data
+
+## Recovery & Firmware (Press R)
+
+Complete recovery and firmware management for all Android devices.
+
+### Recovery Options
+
+| Option | Description |
+|--------|-------------|
+| **Factory Reset** | Complete data wipe (requires confirmation) |
+| **Wipe Cache** | Clear cache partition (safe) |
+| **Reboot to Recovery** | Enter recovery mode |
+| **Reboot to Download/Fastboot** | Enter flash mode |
+| **Shutdown** | Power off device |
+
+### Firmware Features
+
+| Option | Description |
+|--------|-------------|
+| **Firmware Info** | Get download links for your device manufacturer |
+| **Check Samsung Firmware** | Search Samsung firmware server |
+| **Sideload ZIP** | Flash ZIP via ADB sideload |
+
+### Supported Manufacturers
+
+Automatic detection and firmware guidance for:
+- **Samsung** - Odin/Heimdall, SamMobile, SamFw, Frija
+- **Xiaomi/Redmi/POCO** - MiFlash, MIUI downloads
+- **OnePlus** - MSM Tool, OxygenOS
+- **Google Pixel** - Android Flash Tool, Factory Images
+- **Huawei/Honor** - HiSuite, Firmware Finder
+- **Motorola** - Rescue and Smart Assistant
+- **Realme/OPPO/Vivo** - MSM Tool, AFT
+
+### Samsung Download Mode
+
+For Samsung devices, enter Download mode to flash firmware:
+1. Press **R** → **4** (Reboot to Download)
+2. Or manually: Power off → Hold Vol Down + Power while connecting USB
+3. Use Odin (Windows) or Heimdall (Linux/Mac) to flash
 
 ## Samsung Debloat (Entry-Level Devices)
 
@@ -239,6 +280,7 @@ adb-SuperTool/
     ├── adb_manager.py    # ADB wrapper
     ├── database.py       # Threat database
     ├── debloater.py      # Samsung debloat module
+    ├── recovery.py       # Recovery & firmware module
     ├── scanner.py        # App scanner
     └── tui.py            # Terminal UI
 ```
