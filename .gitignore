@@ -1,53 +1,16 @@
-# Virtual environment
-venv/
-env/
-.venv/
-
-# Android tools (downloaded automatically)
-android-tools/
-
-# Python cache
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-
-# Distribution / packaging
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
+# Rust build artifacts
+/target/
+Cargo.lock
 
 # IDE
 .idea/
 .vscode/
 *.swp
 *.swo
-*~
 
 # OS
 .DS_Store
 Thumbs.db
 
-# Logs
-*.log
-
-# Environment variables
-.env
-.env.local
-
-# API keys (never commit these!)
-*.key
-*_key.txt
+# ADB tools (auto-downloaded)
+/platform-tools/

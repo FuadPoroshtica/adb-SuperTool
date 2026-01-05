@@ -1,0 +1,70 @@
+[package]
+name = "android-supertool"
+version = "1.0.0"
+edition = "2021"
+authors = ["Mobile Shop Tools"]
+description = "Android device management tool for mobile shops - scan, clean, debloat, and recover devices"
+license = "MIT"
+readme = "README.md"
+
+[dependencies]
+# GUI - egui with eframe for native window
+eframe = { version = "0.29", default-features = false, features = [
+    "default_fonts",
+    "glow",
+    "persistence",
+] }
+egui_extras = { version = "0.29", features = ["all_loaders", "image"] }
+image = { version = "0.25", default-features = false, features = ["png"] }
+
+# Async runtime
+tokio = { version = "1.40", features = ["full"] }
+
+# HTTP client for downloads
+reqwest = { version = "0.12", features = ["blocking", "json", "stream"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# CLI arguments (for headless mode)
+clap = { version = "4.5", features = ["derive"] }
+
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+# Regex for pattern matching
+regex = "1.10"
+
+# Directory handling
+dirs = "5.0"
+
+# Zip extraction (for ADB platform tools)
+zip = "2.2"
+
+# Find executables in PATH
+which = "7.0"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = "0.3"
+
+# Open URLs/folders in system browser/explorer
+open = "5.3"
+
+# File dialogs
+rfd = "0.15"
+
+[target.'cfg(windows)'.build-dependencies]
+winres = "0.1"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+
+# Windows: hide console window in release builds
+[profile.release.package."*"]
+opt-level = 3
