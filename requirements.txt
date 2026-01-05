@@ -1,0 +1,23 @@
+# Android SuperTool - Requirements
+# TUI Framework
+rich>=13.0.0
+textual>=0.40.0
+
+# HTTP requests for downloading ADB and AI integration
+requests>=2.31.0
+httpx>=0.25.0
+
+# Configuration and data
+pyyaml>=6.0
+toml>=0.10.2
+
+# Progress bars and async
+tqdm>=4.66.0
+aiofiles>=23.0.0
+
+# Platform utilities
+psutil>=5.9.0
+packaging>=23.0
+
+# Optional: AI integration (Claude API)
+anthropic>=0.18.0
