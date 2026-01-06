@@ -1,6 +1,21 @@
-# Rust build artifacts
-/target/
-Cargo.lock
+# Xcode
+build/
+DerivedData/
+*.xcuserstate
+*.xcworkspace
+!*.xcodeproj/project.xcworkspace/
+xcuserdata/
+*.pbxuser
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+*.xccheckout
+*.moved-aside
+
+# Swift Package Manager
+.build/
+Packages/
+Package.resolved
 
 # IDE
 .idea/
@@ -11,6 +26,7 @@ Cargo.lock
 # OS
 .DS_Store
 Thumbs.db
+._*
 
 # ADB tools (auto-downloaded)
 /platform-tools/

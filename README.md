@@ -1,40 +1,64 @@
 # Android SuperTool - Mobile Shop Edition
 
-A powerful, native GUI tool for managing Android phones using ADB. Built in Rust for maximum performance and a single executable with no dependencies. Designed specifically for mobile shops and repair technicians.
+A powerful, native macOS app for managing Android phones using ADB. Built in Swift with SwiftUI for a beautiful, responsive interface. Designed specifically for mobile shops and repair technicians.
 
 ![Screenshot](screenshot.png)
 
 ## Features
 
-- **Single Executable** - Just one 12MB binary, no Python or dependencies needed
-- **Cross-Platform** - Runs on Windows, Linux, and macOS
-- **Auto-Installs ADB** - Downloads Android Platform Tools automatically on first run
-- **Threat Scanning** - Identifies malware, adware, and bloatware with a comprehensive database
+- **Native macOS App** - Single .app bundle, no dependencies needed
+- **SwiftUI Interface** - Modern, beautiful design that follows macOS guidelines
+- **Auto-detects ADB** - Finds ADB from common locations or downloads it
+- **Manual ADB Selection** - Choose your own ADB directory if needed
+- **Threat Scanning** - Identifies malware, adware, and bloatware
 - **One-Click Cleaning** - Remove all detected threats with a single click
 - **Samsung Debloat** - Make entry-level Samsung phones minimal and fast
 - **Recovery Tools** - Factory reset, recovery mode, firmware download links
-- **Native GUI** - Fast, responsive interface built with egui
+
+## Requirements
+
+- macOS 13.0 (Ventura) or later
+- Xcode 15+ (for building from source)
 
 ## Quick Start
 
-### Download & Run
+### Option 1: Download Pre-built App
 
-1. Download the appropriate binary for your OS from the [Releases](../../releases) page
-2. Run the executable - that's it!
+1. Download `AndroidSuperTool.app` from the [Releases](../../releases) page
+2. Move to Applications folder
+3. Double-click to run
 
-### Build from Source
+### Option 2: Build from Source
 
 ```bash
 # Clone the repository
 git clone https://github.com/yourusername/adb-SuperTool.git
 cd adb-SuperTool
 
-# Build release version
-cargo build --release
+# Open in Xcode
+open AndroidSuperTool.xcodeproj
 
-# Run
-./target/release/android-supertool
+# Or build from command line
+xcodebuild -project AndroidSuperTool.xcodeproj -scheme AndroidSuperTool -configuration Release build
 ```
+
+The built `.app` will be in `build/Release/AndroidSuperTool.app`
+
+## ADB Configuration
+
+On first launch, the app will try to find ADB automatically in these locations:
+
+1. Previously saved path (from Settings)
+2. `~/Library/Application Support/AndroidSuperTool/platform-tools/adb`
+3. `/usr/local/bin/adb`
+4. `/opt/homebrew/bin/adb`
+5. `~/Library/Android/sdk/platform-tools/adb`
+6. Android Studio SDK location
+
+**If ADB is not found:**
+
+- Click **Settings** → **Browse...** to select your ADB executable
+- Or click **Download ADB** to automatically download from Google
 
 ## Usage
 
@@ -52,7 +76,7 @@ Scans all installed apps and categorizes them by risk level:
 
 | Level | Color | Description |
 |-------|-------|-------------|
-| CRITICAL | Magenta | Confirmed malware, spyware, banking trojans |
+| CRITICAL | Purple | Confirmed malware, spyware, banking trojans |
 | HIGH | Red | Aggressive adware, fake cleaners, data harvesters |
 | MEDIUM | Orange | Bloatware, intrusive trackers |
 | LOW | Blue | Optional apps, mild bloatware |
@@ -106,51 +130,33 @@ Tools for device recovery and firmware management:
 - Google Pixel: Android Flash Tool
 - Huawei, Motorola, Realme, OPPO, Vivo
 
-## Building
-
-### Prerequisites
-
-- [Rust](https://rustup.rs/) 1.70 or higher
-- On Linux: `libgtk-3-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev`
-
-### Build Commands
-
-```bash
-# Debug build
-cargo build
-
-# Release build (optimized, 12MB)
-cargo build --release
-
-# Run directly
-cargo run --release
-```
-
-### Cross-Compilation
-
-```bash
-# For Windows (from Linux)
-cargo build --release --target x86_64-pc-windows-gnu
-
-# For macOS (requires cross-compilation toolchain)
-cargo build --release --target x86_64-apple-darwin
-```
-
 ## Project Structure
 
 ```
-android-supertool/
-├── Cargo.toml          # Rust dependencies
-├── README.md           # This file
-└── src/
-    ├── main.rs         # Entry point & GUI window
-    ├── app.rs          # Main application state & UI
-    ├── adb.rs          # ADB command wrapper
-    ├── database.rs     # Threat database
-    ├── scanner.rs      # App scanner
-    ├── debloater.rs    # Samsung debloat module
-    ├── recovery.rs     # Recovery & firmware tools
-    └── installer.rs    # ADB auto-installer
+AndroidSuperTool/
+├── AndroidSuperTool.xcodeproj/
+├── AndroidSuperTool/
+│   ├── AndroidSuperToolApp.swift    # App entry point
+│   ├── Views/
+│   │   ├── ContentView.swift        # Main navigation
+│   │   ├── ScanView.swift           # Device scanner
+│   │   ├── DebloatView.swift        # Samsung debloater
+│   │   ├── RecoveryView.swift       # Recovery tools
+│   │   └── SettingsView.swift       # ADB configuration
+│   ├── Models/
+│   │   ├── DeviceInfo.swift         # Device data model
+│   │   └── ScanResult.swift         # Scan result model
+│   ├── Managers/
+│   │   ├── ADBManager.swift         # ADB command wrapper
+│   │   ├── ADBInstaller.swift       # ADB auto-installer
+│   │   ├── ThreatDatabase.swift     # Malware database
+│   │   ├── AppScanner.swift         # App analyzer
+│   │   ├── Debloater.swift          # Samsung debloater
+│   │   └── RecoveryManager.swift    # Recovery tools
+│   └── Resources/
+│       ├── Info.plist
+│       └── AndroidSuperTool.entitlements
+└── README.md
 ```
 
 ## Common Issues
@@ -165,9 +171,9 @@ android-supertool/
 - Some devices (especially Xiaomi) restrict uninstalling certain apps
 - Try disabling the app instead of uninstalling
 
-**ADB not installing:**
-- Check your internet connection
-- The tool downloads ADB from Google's servers
+**ADB not found:**
+- Go to Settings and click "Browse..." to select your ADB
+- Or click "Download ADB" to install it automatically
 
 ## For Mobile Shops
 
@@ -182,7 +188,7 @@ android-supertool/
 
 ### Tips
 
-- Keep the tool on a USB drive for quick access
+- Keep the app in your Dock for quick access
 - The aggressive debloat level is great for entry-level Samsung phones
 - Always ask customer permission before removing apps
 - Recovery tools require the phone to already have USB debugging enabled
@@ -193,10 +199,10 @@ Contributions are welcome! Please feel free to submit issues and pull requests.
 
 ### Adding New Threats
 
-Edit `src/database.rs` and add entries to the appropriate category:
+Edit `Managers/ThreatDatabase.swift` and add entries to the appropriate array:
 
-```rust
-("com.example.malware", "Malware Category", "Description of threat"),
+```swift
+("com.example.malware", "Category", "Description"),
 ```
 
 ## License
